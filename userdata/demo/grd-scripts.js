@@ -43,12 +43,35 @@ const testAll = function() {
 
 }
 
-const readNext = function(string, delimiter){
+const extractAllStudentInfo = function(info_files){
+    var result =[];
+    for(var i=0; i<info_files.length();i++){
+        result.push(extractStudentinfo(info_files[i]));
+    }
+    return result;
+}
+
+const readNext = function(string, delimiter, ignore_delim){
     var num = string.indexOf(delimiter);
-    var res = string.substring(1,num);
-    var re = string.substring(num);
+    if (num === -1){ 
+        var res = string;
+        var re = null;
+        return{ 
+            result: res.trim(),
+            remain: re,
+        }
+    }
+    else{
+        var res = string.substring(0,num);
+    } 
+    if(ignore_delim===false || ignore_delim===undefined){
+        var re = string.substring(num+1);
+    }
+    else {
+        var re = string.substring(num);
+    }
     return{ 
-        result: res,
+        result: res.trim(),
         remain: re,
     }
 }
@@ -64,43 +87,50 @@ const extractStudentinfo = function(path) {
         var re = readNext(string, delim).remain;
         delim = "(";
         var name = readNext(re,delim).result;
-        var re = readNext(re,delim).remain;
+        re = readNext(re,delim).remain;
         delim = ")";
         var id = readNext(re,delim).result;
-        var re = readNext(re,delim).remain;
+        re = readNext(re,delim).remain;
         delim = ":";
-        var re = readNext(re,delim).remain;
+        re = readNext(re,delim).remain;
         delim ="\n";
         var assignment = readNext(re,delim).result;
-        var re = readNext(re,delim).remain;
+        re = readNext(re,delim).remain;
         delim = ":";
-        var re = readNext(re,delim).remain;
+        re = readNext(re,delim).remain;
         delim ="\n";
         var date = readNext(re,delim).result;
-        var re = readNext(re,delim).remain;
+        re = readNext(re,delim).remain;
         delim=":";
         var status = readNext(re,delim).result;
-        var re = readNext(re,delim).remain;
+        re = readNext(re,delim).remain;
         delim =".";
-        var re = readNext(re,delim).remain;
+        re = readNext(re,delim).remain;
         delim=":";
         var re = readNext(re,delim).remain;
         delim =".";
-        var re = readNext(re,delim).remain;
+        re = readNext(re,delim).remain;
         delim =":";
-        var re = readNext(re,delim).remain;
+        re = readNext(re,delim).remain;
         delim="\n";
-        var re = readNext(re,delim).remain;
+        re = readNext(re,delim).remain; //begin to read fileanem
+        var file = [];
+        while (re!=null){
         delim=":";
-        var re = readNext(re,delim).remain;
+        re = readNext(re,delim).remain;
         delim ="\n";
         var origin_filename = readNext(re,delim).result;
-        var re = readNext(re,delim).remain;
+        re = readNext(re,delim).remain;
         delim =":";
-        var re  = readNext(re,delim).remain;
-        delim ="\n";
+        re  = readNext(re,delim).remain;
+        delim = "\n";
         var filename  = readNext(re,delim).result;
-       console.log(name," ",id," ",assignment," ",date," ",origin_filename,"\n ",filename);
+        re  = readNext(re,delim).remain;
+        file.push({origin_filename,filename});
+        }
+        return {
+            name, id, assignment, date, file
+        }
     })
 }
 

@@ -1,6 +1,6 @@
-const fs = require('fs');
+const fs = require('fs-extra');
 const path = require('path');
-const extract = require('extract-zip');
+const unzip = require('unzip');
 
 const readTitles = function(dataURL){ 
     let titles = []
@@ -21,6 +21,7 @@ const extractFolderPath = (path) => {
     }
     lastSlash = path.lastIndexOf('/');
     return {
+        full: path,
         parent: path.substring(0, lastSlash+1),
         name: path.substring(lastSlash+1)
     }
@@ -111,7 +112,65 @@ const refactorFolder = function(path) {
     return Promise.all(promises);
 }
 
-const extractZip = 
+const extractZip = function(zip_path, dest) {
+    var readStream = fs.createReadStream(zip_path);
+    var writeStream = fstream.Writer(dest);
+    
+    readStream
+    .pipe(unzip.Parse())
+    .pipe(writeStream)
+}
+
+const getInfoFiles = function(submissions_dir) {
+    return getFiles(submissions_dir,
+        /.*_[a-z]{3}[0-9]{4}_attempt_[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}\.txt/g);
+}
+
+const extractAllStudentInfo = function(info_files){
+    // From Tuan Hung
+}
+
+const parseStudentName = function(student_name, strBetween) {
+
+}
+
+const extractZipBeautiful = async function(zip_path, dest, studentInfoSavePath) {
+    extractZip(zip_path, dest);
+    let infoFiles = getInfoFiles(dest);
+    let studentInfos = extractAllStudentInfo(infoFiles);
+    const { full: dest } = extractFolderPath(dest);
+    return Promise.all(studentInfos.map(student => {
+        const { studentName } = parseStudentName(student.name);
+        let student_folder = fs.mkdirsSync(full + '/' + studentName.full);
+        return Promise.all(student.files.map(file => new Promise( (resolve, reject) => {
+            fs.copy(dest+'/'+file.filename, student_folder + '/' + file.original_filename, function(err){
+                if (err){
+                    reject(new Error('Error copying file from:\n'+
+                    '\tsrcDir: "' + dest + '/",\n'+
+                    '\toldFileName: "' + file.filename + '"\n'+
+                    'to the following path:\n' + 
+                    '\tdestDir: "' + student_folder + '/",\n'+
+                    '\tfile: "' + file.original_filename + '"\n'));
+                }
+                else {
+                    resolve(undefined);
+                }
+            });
+        })))
+    }))
+    .then(() => Promise.all(infoFiles.map(file => new Promise( (resolve, reject) => {
+        fs.remove(dest + '/' + file, err => {
+            if (err) {
+                reject(err);
+            }
+        });
+    }))))
+    .then(() => new Promise( (resolve, reject) => {
+        if (studentInfoSavePath)
+            const { full : studentInfoSavePath } = extractFolderPath(studentInfoSavePath);
+            fs.createFile(studentInfoSavePath + '/studentInfo.json', reject);
+    }));
+}
 
 module.exports = {
     readTitles,
@@ -120,6 +179,7 @@ module.exports = {
     refactorFile,
     getFiles,
     refactorFolder,
+    extractZipBeautiful
 };
 
 

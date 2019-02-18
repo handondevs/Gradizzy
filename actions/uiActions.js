@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const extract = require('extract-zip');
 
 const readTitles = function(dataURL){ 
     let titles = []
@@ -76,10 +77,16 @@ const isFile = fileName => {
     return fs.lstatSync(fileName).isFile()
 }
 
-const getFiles = function(folderPath) {
-    return fs.readdirSync(folderPath).map(fileName => {
+const getFiles = function(folderPath, regex) {
+    let files = fs.readdirSync(folderPath).map(fileName => {
         return path.join(folderPath, fileName);
     }).filter(isFile);
+    if (!regex){
+        return files;
+    }
+    return files.filter(fileName => {
+        return regex.test(fileName);
+    });
 }
 
 const refactorFolder = function(path) {
@@ -104,11 +111,14 @@ const refactorFolder = function(path) {
     return Promise.all(promises);
 }
 
+const extractZip = 
+
 module.exports = {
     readTitles,
     extractFolderPath,
     changeFolderName,
     refactorFile,
+    getFiles,
     refactorFolder,
 };
 

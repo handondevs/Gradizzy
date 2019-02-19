@@ -1,6 +1,6 @@
 const fs = require('fs-extra');
+const fstream = require('fstream');
 const path = require('path');
-const unzip = require('unzip');
 
 const readTitles = function(dataURL){ 
     let titles = []
@@ -78,98 +78,292 @@ const isFile = fileName => {
     return fs.lstatSync(fileName).isFile()
 }
 
-const getFiles = function(folderPath, regex) {
-    let files = fs.readdirSync(folderPath).map(fileName => {
-        return path.join(folderPath, fileName);
-    }).filter(isFile);
-    if (!regex){
-        return files;
-    }
-    return files.filter(fileName => {
-        return regex.test(fileName);
+const getFiles = async function(folderPath, regex) {
+    return new Promise((resolve, reject) => {
+        fs.readdir(folderPath, (err, files) => {
+            if (err){
+                reject(err);
+                return;
+            }
+            const res = files.map(fileName => {
+                return path.join(folderPath, fileName);
+            }).filter(isFile);
+            if (!regex){
+                resolve(res);
+                return;
+            }
+            resolve(res.filter(fileName => {
+                return regex.test(fileName);
+            }));
+        })
     });
 }
 
-const refactorFolder = function(path) {
+const refactorFolder = async function(path) {
     if (isFile(path)){
         return new Promise((resolve, reject) => {
             reject(new Error('Not a folder.'));
         })
     }
-    const files = getFiles(path);
-    const comps = extractFolderPath(path);
-    console.log(comps);
-    const promises = files.map(filePath => (new Promise((resolve, reject) => {
-        refactorFile(filePath, comps.name, (err) => {
-            if (err){
-                reject(new Error('Error refactoring file: '+filePath+'\nMore details:\n' + err));
-            }
-            else {
-                resolve(undefined);
-            }
-        })
-    })))
-    return Promise.all(promises);
+    return getFiles(path)
+    .then((files) => {
+        const comps = extractFolderPath(path);
+        const promises = files.map(filePath => (new Promise((resolve, reject) => {
+            refactorFile(filePath, comps.name, (err) => {
+                if (err){
+                    reject(new Error('Error refactoring file: '+filePath+'\nMore details:\n' + err));
+                }
+                else {
+                    resolve();
+                }
+            })
+        })))
+        return Promise.all(promises);
+    });
 }
 
-const extractZip = function(zip_path, dest) {
-    var readStream = fs.createReadStream(zip_path);
-    var writeStream = fstream.Writer(dest);
-    
-    readStream
-    .pipe(unzip.Parse())
-    .pipe(writeStream)
+const extractZip = function(zip_path, dest, srcDirExpand) {
+
+    var AdmZip = require('adm-zip');
+    var zip = new AdmZip(zip_path);
+    var zipEntries = zip.getEntries();
+
+    const extractRootName = (path) => {
+        let slash = path.indexOf('/');
+        if (slash >= 0) {
+            return {
+                root: path.substring(0, slash+1),
+                remain: path.substring(slash+1)
+            }
+        } else 
+            return {
+                root: undefined,
+                remain: path
+            }
+    };
+
+    zipEntries = zipEntries.filter((entry, index, arr) => {
+        const { root } = extractRootName(entry.entryName);
+        return (root !== '__MACOSX/');
+    })
+
+    let containsRoot = false;
+    if (zipEntries.length > 1) {
+        const { parent } = extractFolderPath(zipEntries[1].entryName);
+        if (parent === zipEntries[0].entryName){
+            containsRoot = true;
+        }
+    }
+
+    if (srcDirExpand === true && containsRoot === true){
+        for (let i in zipEntries){
+            if (i == 0)
+                continue;
+            zip.extractEntryTo(zipEntries[i].entryName, dest, false, true);
+        }
+    }
+    else {
+        zip.extractAllTo(dest, true);
+    }
+
 }
 
-const getInfoFiles = function(submissions_dir) {
+const getInfoFiles = async function(submissions_dir) {
     return getFiles(submissions_dir,
         /.*_[a-z]{3}[0-9]{4}_attempt_[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}\.txt/g);
 }
 
-const extractAllStudentInfo = function(info_files){
-    // From Tuan Hung
+const readNext = function(string, delimiter, ignore_delim){
+    var num = string.indexOf(delimiter);
+    if (num === -1){ 
+        var res = string;
+        var re = null;
+        return{ 
+            result: res.trim(),
+            remain: re,
+        }
+    }
+    else{
+        var res = string.substring(0,num);
+    } 
+    if(ignore_delim===false || ignore_delim===undefined){
+        var re = string.substring(num+1);
+    }
+    else {
+        var re = string.substring(num);
+    }
+    return{ 
+        result: res.trim(),
+        remain: re,
+    }
 }
 
-const parseStudentName = function(student_name, strBetween) {
+const extractStudentinfo = async function(path) {
+    const fs =require('fs')
+    let info = {};
+    return new Promise((resolve, reject) => {
+        fs.readFile(path, (err,data) => {
+        if (err){
+            reject(err);
+            return;
+        }
+        var string = data.toString();
+        delim=":";
+        var res=readNext(string,delim).result.trim();
+        var re = readNext(string, delim).remain;
+        delim = "(";
+        var name = readNext(re,delim).result;
+        info.name = name;
+        re = readNext(re,delim).remain;
+        delim = ")";
+        var id = readNext(re,delim).result;
+        info.id = id;
+        re = readNext(re,delim).remain;
+        for (let i = 0; i < 5; i++){
+            var { result:att, remain } = readNext(re, ":");
+            re = remain.trim();
+            var { result:val, remain } = readNext(re, "\n");
+            re = remain.trim();
+            info[replaceAll(att, " ","")] = val;
+        }
+        var { result:att, remain } = readNext(re, ":");
+        re = remain.trim();
+        info.files = [];
+        while (re !== null && re.trim() !== ""){
+            var { remain } = readNext(re, ":");
+            re = remain.trim();
+            var { result:val, remain } = readNext(re, "\n");
+            re = remain.trim();
+            let original_filename = val;
 
+            var { remain } = readNext(re, ":");
+            re = remain.trim();
+            var { result:val, remain } = readNext(re, "\n");
+            if (remain !== null)
+                re = remain.trim();
+            else
+                re = remain;
+            let filename = val;
+
+            info.files.push({original_filename,filename});
+        }
+        resolve(info);
+    })});
 }
 
-const extractZipBeautiful = async function(zip_path, dest, studentInfoSavePath) {
-    extractZip(zip_path, dest);
-    let infoFiles = getInfoFiles(dest);
-    let studentInfos = extractAllStudentInfo(infoFiles);
-    const { full: dest } = extractFolderPath(dest);
-    return Promise.all(studentInfos.map(student => {
-        const { studentName } = parseStudentName(student.name);
-        let student_folder = fs.mkdirsSync(full + '/' + studentName.full);
-        return Promise.all(student.files.map(file => new Promise( (resolve, reject) => {
-            fs.copy(dest+'/'+file.filename, student_folder + '/' + file.original_filename, function(err){
-                if (err){
-                    reject(new Error('Error copying file from:\n'+
-                    '\tsrcDir: "' + dest + '/",\n'+
-                    '\toldFileName: "' + file.filename + '"\n'+
-                    'to the following path:\n' + 
-                    '\tdestDir: "' + student_folder + '/",\n'+
-                    '\tfile: "' + file.original_filename + '"\n'));
+const extractAllStudentInfo = async (info_files) => {
+    return Promise.all(info_files.map(
+        filepath => extractStudentinfo(filepath)
+    ))
+}
+
+const replaceAll = function(target, search, replacement) {
+    return target.replace(new RegExp(search, 'g'), replacement);
+};
+
+const parseStudentName = function(student_name, strReplace) {
+    const strBetween = (strReplace)?strReplace:"";
+    let { result, remain } = readNext(student_name, " ");
+    remain = replaceAll(remain, " ", strBetween);
+    return {
+        full: result + strBetween + remain,
+        first: result,
+        last: remain
+    };
+}
+
+const extractZipBeautiful = async function(zip_path, destination, studentInfoSavePath) {
+    extractZip(zip_path, destination, true);
+    const { full: dest } = extractFolderPath(destination);
+
+    return getInfoFiles(destination)
+    .then(infoFiles => {
+        return extractAllStudentInfo(infoFiles)
+        .then((studentInfos) => {
+            // Remove all txt files
+            return Promise.all(infoFiles.map(file => new Promise((resolve, reject) => {
+                fs.remove(file, err => {
+                    if (err)
+                        reject(err);
+                    else
+                        resolve();
+                })
+            })))
+            .then(() => {
+                return Promise.resolve(studentInfos);
+            });
+        });
+    })
+    .then(studentInfos => {
+        // Copy each student's files into their own folder
+        let B = Promise.all(studentInfos.map(student => {
+            const studentName = parseStudentName(student.name);
+            fs.mkdirsSync(dest + '/' + studentName.full);
+            return new Promise( (resolve, reject) => {
+                const {filename} = student.files[0];
+                const type = filename.substring(filename.lastIndexOf(".")+1);
+
+                // If student file contains only one zip folder
+                if (student.files.length === 1 && type === 'zip'){ 
+                    extractZip(dest+'/'+filename, dest + '/' + studentName.full, true);
+                    resolve([dest+'/'+filename]);
                 }
                 else {
-                    resolve(undefined);
+                    Promise.all(student.files.map(file => new Promise( (resolve, reject) => {
+                        fs.copy(dest+'/'+file.filename, dest + '/' + studentName.full+ '/' + file.original_filename, function(err){
+                            if (err){
+                                reject(new Error('Error copying file from:\n'+
+                                '\tsrcDir: "' + dest + '/",\n'+
+                                '\toldFileName: "' + file.filename + '"\n'+
+                                'to the following path:\n' + 
+                                '\tdestDir: "' + student_folder + '/",\n'+
+                                '\tfile: "' + file.original_filename + '"\n'));
+                            }
+                            resolve(dest+'/'+file.filename);
+                        });
+                    })))
+                    .then(resolve)
+                    .catch(reject);
                 }
+            })
+            .then((filesToRemove)=>{
+                return Promise.all(filesToRemove.map(file => new Promise((resolve, reject)=>{
+                    fs.remove(file, err => {
+                        if (err)
+                            reject(err);
+                        else
+                            resolve();
+                    })
+                })));
             });
-        })))
-    }))
-    .then(() => Promise.all(infoFiles.map(file => new Promise( (resolve, reject) => {
-        fs.remove(dest + '/' + file, err => {
-            if (err) {
-                reject(err);
+        }));
+
+        // Save student infos into file
+        let C = new Promise( (resolve, reject) => {
+            if (studentInfoSavePath){
+                const { full : studentInfoPath } = extractFolderPath(studentInfoSavePath);
+                fs.createFile(studentInfoPath + '/studentInfo.json', err => {
+                    if (err){
+                        reject(err);
+                    }
+                    else {
+                        fs.writeFile(studentInfoPath + '/studentInfo.json', 
+                            JSON.stringify(studentInfos), 'utf8', err => {
+                                if (err){
+                                    reject(err);
+                                }
+                                else{
+                                    resolve();
+                                }
+                            }
+                        );
+                    }
+                });
             }
         });
-    }))))
-    .then(() => new Promise( (resolve, reject) => {
-        if (studentInfoSavePath)
-            const { full : studentInfoSavePath } = extractFolderPath(studentInfoSavePath);
-            fs.createFile(studentInfoSavePath + '/studentInfo.json', reject);
-    }));
+
+        return Promise.all([B,C]);
+    });
 }
 
 module.exports = {
@@ -179,7 +373,8 @@ module.exports = {
     refactorFile,
     getFiles,
     refactorFolder,
-    extractZipBeautiful
+    extractZipBeautiful,
+    extractStudentinfo,
 };
 
 

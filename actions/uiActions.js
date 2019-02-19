@@ -147,17 +147,32 @@ const extractZip = function(zip_path, dest, srcDirExpand) {
         return (root !== '__MACOSX/');
     })
 
-    let containsRoot = false;
+    let containsRoot = 0;
     if (zipEntries.length > 1) {
         const { parent } = extractFolderPath(zipEntries[1].entryName);
         if (parent === zipEntries[0].entryName){
-            containsRoot = true;
+            containsRoot = 1;
         }
     }
 
-    if (srcDirExpand === true && containsRoot === true){
+    if (containsRoot === 0){
+        let root = zipEntries[0].entryName;
+        root = root.substring(0,root.indexOf('/')+1);
+        let index;
+        for (index = 0; index < zipEntries.length; index++){
+            let temp = zipEntries[index].entryName;
+            temp = temp.substring(0,temp.indexOf('/')+1);
+            if (temp !== root){
+                break;
+            }
+        }
+        if (index === zipEntries.length)
+            containsRoot = 2;
+    }
+
+    if (srcDirExpand === true && containsRoot > 0){
         for (let i in zipEntries){
-            if (i == 0)
+            if (i == 0 && containsRoot === 1)
                 continue;
             zip.extractEntryTo(zipEntries[i].entryName, dest, false, true);
         }
@@ -374,6 +389,7 @@ module.exports = {
     getFiles,
     refactorFolder,
     extractZipBeautiful,
+    extractZip,
     extractStudentinfo,
 };
 

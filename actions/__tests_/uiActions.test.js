@@ -32,3 +32,10 @@ uiAction.extractZipBeautiful('/Users/phuocdo/Documents/Computer Science/Projects
 .catch(err => {
     console.log(err);
 })
+
+
+/*
+uiAction.extractZip("/Users/phuocdo/Documents/Computer Science/Projects/ReactTest/gradle/SampleHW1/HW1_Boysen.zip",
+"/Users/phuocdo/Documents/Computer Science/Projects/ReactTest/gradle/SampleHW1",
+true);
+*/

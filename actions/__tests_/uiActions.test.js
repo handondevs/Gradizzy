@@ -26,13 +26,15 @@ uiAction.extractStudentinfo("/Users/phuocdo/Documents/Computer Science/Projects/
 */
 
 
-uiAction.extractZipBeautiful('/Users/phuocdo/Documents/Computer Science/Projects/ReactTest/gradle/SampleHW1.zip',
-    '/Users/phuocdo/Documents/Computer Science/Projects/ReactTest/gradle/sampleExtraction',
-    '/Users/phuocdo/Documents/Computer Science/Projects/ReactTest/gradle/sampleExtraction')
+uiAction.extractZipBeautiful('/Users/phuocdo/Documents/Computer Science/Projects/ReactTest/gradle/HW2.zip',
+    '/Users/phuocdo/Documents/Computer Science/Projects/ReactTest/gradle/electron-react/userdata/HW2/src/main/java',
+    '/Users/phuocdo/Documents/Computer Science/Projects/ReactTest/gradle/electron-react/userdata/HW2/src/main/java')
 .catch(err => {
     console.log(err);
 })
 
+const regex = /.*_[a-z]{3}[0-9]{4}_attempt_[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}\.txt/g;
+console.log(regex.test('Homework 2_ced5980_attempt_2019-02-07-23-52-24.txt'))
 
 /*
 uiAction.extractZip("/Users/phuocdo/Documents/Computer Science/Projects/ReactTest/gradle/SampleHW1/HW1_Boysen.zip",

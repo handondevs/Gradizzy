@@ -1,0 +1,12 @@
+ant -f /Users/Hendrix/NetBeansProjects/HW2_Names -Dnb.internal.action.name=run run
+init:
+Deleting: /Users/Hendrix/NetBeansProjects/HW2_Names/build/built-jar.properties
+deps-jar:
+Updating property file: /Users/Hendrix/NetBeansProjects/HW2_Names/build/built-jar.properties
+compile:
+run:
+Enter your first and last name: Kakashi Hatake
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+|Hatake         |Kakashi        |H.K. |
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+BUILD SUCCESSFUL (total time: 9 seconds)

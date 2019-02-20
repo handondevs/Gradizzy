@@ -92,6 +92,9 @@ const getFiles = async function(folderPath, regex) {
                 resolve(res);
                 return;
             }
+            res.filter(fileName => {
+                return regex.test(fileName);
+            });
             resolve(res.filter(fileName => {
                 return regex.test(fileName);
             }));
@@ -185,7 +188,7 @@ const extractZip = function(zip_path, dest, srcDirExpand) {
 
 const getInfoFiles = async function(submissions_dir) {
     return getFiles(submissions_dir,
-        /.*_[a-z]{3}[0-9]{4}_attempt_[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}\.txt/g);
+        /.*_[a-z]{3}[0-9]{4}_attempt_[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}\.txt/);
 }
 
 const readNext = function(string, delimiter, ignore_delim){
@@ -246,6 +249,10 @@ const extractStudentinfo = async function(path) {
         info.files = [];
         while (re !== null && re.trim() !== ""){
             var { remain } = readNext(re, ":");
+            if (remain === null){
+                resolve(info);
+                return;
+            }
             re = remain.trim();
             var { result:val, remain } = readNext(re, "\n");
             re = remain.trim();
@@ -313,19 +320,23 @@ const extractZipBeautiful = async function(zip_path, destination, studentInfoSav
         // Copy each student's files into their own folder
         let B = Promise.all(studentInfos.map(student => {
             const studentName = parseStudentName(student.name);
-            fs.mkdirsSync(dest + '/' + studentName.full);
+            fs.mkdirsSync(dest + '/' + studentName.last + studentName.first);
             return new Promise( (resolve, reject) => {
+                if (student.files.length === 0){
+                    resolve([]);
+                    return;
+                }
                 const {filename} = student.files[0];
                 const type = filename.substring(filename.lastIndexOf(".")+1);
 
                 // If student file contains only one zip folder
                 if (student.files.length === 1 && type === 'zip'){ 
-                    extractZip(dest+'/'+filename, dest + '/' + studentName.full, true);
+                    extractZip(dest+'/'+filename, dest + '/' + studentName.last + studentName.first, true);
                     resolve([dest+'/'+filename]);
                 }
                 else {
                     Promise.all(student.files.map(file => new Promise( (resolve, reject) => {
-                        fs.copy(dest+'/'+file.filename, dest + '/' + studentName.full+ '/' + file.original_filename, function(err){
+                        fs.copy(dest+'/'+file.filename, dest + '/' + studentName.last + studentName.first + '/' + file.original_filename, function(err){
                             if (err){
                                 reject(new Error('Error copying file from:\n'+
                                 '\tsrcDir: "' + dest + '/",\n'+
@@ -342,6 +353,9 @@ const extractZipBeautiful = async function(zip_path, destination, studentInfoSav
                 }
             })
             .then((filesToRemove)=>{
+                if (filesToRemove.length === 0){
+                    return Promise.resolve();
+                }
                 return Promise.all(filesToRemove.map(file => new Promise((resolve, reject)=>{
                     fs.remove(file, err => {
                         if (err)
